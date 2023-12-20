@@ -1,0 +1,21 @@
+[tool.poetry]
+name = "hw1"
+version = "0.1.0"
+description = ""
+authors = ["Zhangfan Dong <dong.zhangfan@gmail.com>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.11"
+numpy = "^1.26"
+ipython = "^8.18.1"
+pybind11 = "^2.11.1"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^7.4.3"
+numdifftools = "^0.9.41"
+mugrade = { git = "https://github.com/dlsys10714/mugrade.git"}
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

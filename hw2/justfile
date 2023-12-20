@@ -1,0 +1,4 @@
+test_init:
+     poetry run -- python3 -m pytest -v -k "test_init"
+test_nn_linear:
+     poetry run -- python3 -m pytest -v -k "test_nn_linear"
