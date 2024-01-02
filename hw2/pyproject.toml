@@ -1,5 +1,5 @@
 [tool.poetry]
-name = "hw1"
+name = "hw2"
 version = "0.1.0"
 description = ""
 authors = ["Zhangfan Dong <dong.zhangfan@gmail.com>"]
@@ -19,3 +19,8 @@ mugrade = { git = "https://github.com/dlsys10714/mugrade.git"}
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
+
+[tool.pytest.ini_options]
+pythonpath = [
+    "."
+]

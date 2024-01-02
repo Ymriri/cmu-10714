@@ -1,13 +1,8 @@
-import sys
-
-sys.path.append("./python")
 import numpy as np
 import needle as ndl
 import needle.nn as nn
 
-sys.path.append("./apps")
-from mlp_resnet import *
-
+from apps.mlp_resnet import ResidualBlock, MLPResNet, epoch, train_mnist
 import mugrade
 
 """Deterministically generate a matrix"""
@@ -15,8 +10,7 @@ import mugrade
 
 def get_tensor(*shape, entropy=1):
     np.random.seed(np.prod(shape) * len(shape) * entropy)
-    return ndl.Tensor(np.random.randint(0, 100, size=shape) / 20,
-                      dtype="float32")
+    return ndl.Tensor(np.random.randint(0, 100, size=shape) / 20, dtype="float32")
 
 
 def get_int_tensor(*shape, low=0, high=10, entropy=1):
@@ -124,7 +118,7 @@ def logsoftmax_forward(shape, mult=1.0):
 def logsoftmax_backward(shape, mult=1.0):
     x = get_tensor(*shape)
     y = ndl.ops.logsoftmax(x * mult)
-    z = (y ** 2).sum()
+    z = (y**2).sum()
     z.backward()
     return x.grad.cached_data
 
@@ -196,8 +190,7 @@ def residual_backward(shape=(5, 5)):
     return x.grad.cached_data
 
 
-def learn_model_1d(feature_size, nclasses, _model, optimizer, epochs=1,
-                   **kwargs):
+def learn_model_1d(feature_size, nclasses, _model, optimizer, epochs=1, **kwargs):
     np.random.seed(42)
     model = _model([])
     X = get_tensor(1024, feature_size).cached_data
@@ -210,8 +203,7 @@ def learn_model_1d(feature_size, nclasses, _model, optimizer, epochs=1,
 
     for _ in range(epochs):
         for i, (X0, y0) in enumerate(
-                zip(np.array_split(X, m // batch),
-                    np.array_split(y, m // batch))
+            zip(np.array_split(X, m // batch), np.array_split(y, m // batch))
         ):
             opt.reset_grad()
             X0, y0 = ndl.Tensor(X0, dtype="float32"), ndl.Tensor(y0)
@@ -233,8 +225,7 @@ def learn_model_1d(feature_size, nclasses, _model, optimizer, epochs=1,
     return np.array(loss.cached_data)
 
 
-def learn_model_1d_eval(feature_size, nclasses, _model, optimizer, epochs=1,
-                        **kwargs):
+def learn_model_1d_eval(feature_size, nclasses, _model, optimizer, epochs=1, **kwargs):
     np.random.seed(42)
     model = _model([])
     X = get_tensor(1024, feature_size).cached_data
@@ -246,7 +237,7 @@ def learn_model_1d_eval(feature_size, nclasses, _model, optimizer, epochs=1,
     opt = optimizer(model.parameters(), **kwargs)
 
     for i, (X0, y0) in enumerate(
-            zip(np.array_split(X, m // batch), np.array_split(y, m // batch))
+        zip(np.array_split(X, m // batch), np.array_split(y, m // batch))
     ):
         opt.reset_grad()
         X0, y0 = ndl.Tensor(X0, dtype="float32"), ndl.Tensor(y0)
@@ -336,12 +327,12 @@ def check_training_mode():
 
 def power_scalar_forward(shape, power=2):
     x = get_tensor(*shape)
-    return (x ** power).cached_data
+    return (x**power).cached_data
 
 
 def power_scalar_backward(shape, power=2):
     x = get_tensor(*shape)
-    y = (x ** power).sum()
+    y = (x**power).sum()
     y.backward()
     return x.grad.cached_data
 
@@ -385,9 +376,8 @@ def residual_block_num_params(dim, hidden_dim, norm):
 
 def residual_block_forward(dim, hidden_dim, norm, drop_prob):
     np.random.seed(2)
-    input_tensor = ndl.Tensor(np.random.randn(1, dim))
-    output_tensor = ResidualBlock(dim, hidden_dim, norm, drop_prob)(
-        input_tensor)
+    input_tensor = ndl.Tensor(np.random.randn(1, dim), dtype=np.float32)
+    output_tensor = ResidualBlock(dim, hidden_dim, norm, drop_prob)(input_tensor)
     return output_tensor.numpy()
 
 
@@ -396,8 +386,7 @@ def mlp_resnet_num_params(dim, hidden_dim, num_blocks, num_classes, norm):
     return np.array(num_params(model))
 
 
-def mlp_resnet_forward(dim, hidden_dim, num_blocks, num_classes, norm,
-                       drop_prob):
+def mlp_resnet_forward(dim, hidden_dim, num_blocks, num_classes, norm, drop_prob):
     np.random.seed(4)
     input_tensor = ndl.Tensor(np.random.randn(2, dim), dtype=np.float32)
     output_tensor = MLPResNet(
@@ -411,8 +400,7 @@ def train_epoch_1(hidden_dim, batch_size, optimizer, **kwargs):
     train_dataset = ndl.data.MNISTDataset(
         "./data/train-images-idx3-ubyte.gz", "./data/train-labels-idx1-ubyte.gz"
     )
-    train_dataloader = ndl.data.DataLoader(dataset=train_dataset,
-                                           batch_size=batch_size)
+    train_dataloader = ndl.data.DataLoader(dataset=train_dataset, batch_size=batch_size)
 
     model = MLPResNet(784, hidden_dim)
     opt = optimizer(model.parameters(), **kwargs)
@@ -437,8 +425,7 @@ def eval_epoch_1(hidden_dim, batch_size):
 def train_mnist_1(batch_size, epochs, optimizer, lr, weight_decay, hidden_dim):
     np.random.seed(1)
     out = train_mnist(
-        batch_size, epochs, optimizer, lr, weight_decay, hidden_dim,
-        data_dir="./data"
+        batch_size, epochs, optimizer, lr, weight_decay, hidden_dim, data_dir="./data"
     )
     return np.array(out)
 
@@ -447,8 +434,7 @@ def test_check_prng_contact_us_if_this_fails_1():
     np.testing.assert_allclose(
         check_prng(3, 3),
         np.array(
-            [[2.1, 0.95, 3.45], [3.1, 2.45, 2.3], [3.3, 0.4, 1.2]],
-            dtype=np.float32
+            [[2.1, 0.95, 3.45], [3.1, 2.45, 2.3], [3.3, 0.4, 1.2]], dtype=np.float32
         ),
         rtol=1e-08,
         atol=1e-08,
@@ -467,8 +453,7 @@ def test_op_power_scalar_forward_1():
 def test_op_power_scalar_forward_2():
     np.testing.assert_allclose(
         power_scalar_forward((2, 2), power=-1.5),
-        np.array([[0.16309206, 0.11617859], [8.0, 0.10475656]],
-                 dtype=np.float32),
+        np.array([[0.16309206, 0.11617859], [8.0, 0.10475656]], dtype=np.float32),
         rtol=1e-5,
         atol=1e-5,
     )
@@ -484,27 +469,51 @@ def test_op_power_scalar_backward_1():
 
 
 def test_op_logsoftmax_forward_1():
-    np.testing.assert_allclose(logsoftmax_forward((3, 3)),
-                               np.array([[-1.6436583, -2.7936583, -0.29365814],
-                                         [-0.6787312, -1.3287311, -1.4787312],
-                                         [-0.16337626, -3.0633762, -2.2633762]],
-                                        dtype=np.float32), rtol=1e-5, atol=1e-5)
+    np.testing.assert_allclose(
+        logsoftmax_forward((3, 3)),
+        np.array(
+            [
+                [-1.6436583, -2.7936583, -0.29365814],
+                [-0.6787312, -1.3287311, -1.4787312],
+                [-0.16337626, -3.0633762, -2.2633762],
+            ],
+            dtype=np.float32,
+        ),
+        rtol=1e-5,
+        atol=1e-5,
+    )
 
 
 def test_op_logsoftmax_stable_forward_1():
-    np.testing.assert_allclose(logsoftmax_forward((3, 3), mult=1e5),
-                               np.array([[-135000.02, -250000., 0.],
-                                         [0., -65000., -80000.],
-                                         [0., -290000., -210000.]],
-                                        dtype=np.float32), rtol=1e-5, atol=1e-5)
+    np.testing.assert_allclose(
+        logsoftmax_forward((3, 3), mult=1e5),
+        np.array(
+            [
+                [-135000.02, -250000.0, 0.0],
+                [0.0, -65000.0, -80000.0],
+                [0.0, -290000.0, -210000.0],
+            ],
+            dtype=np.float32,
+        ),
+        rtol=1e-5,
+        atol=1e-5,
+    )
 
 
 def test_op_logsoftmax_backward_1():
-    np.testing.assert_allclose(logsoftmax_backward((3, 3)),
-                               np.array([[-1.4585897, -5.008274, 6.4668627],
-                                         [2.1793516, -0.81108296, -1.3682691],
-                                         [8.998467, -5.613649, -3.3848193]],
-                                        dtype=np.float32), rtol=1e-5, atol=1e-5)
+    np.testing.assert_allclose(
+        logsoftmax_backward((3, 3)),
+        np.array(
+            [
+                [-1.4585897, -5.008274, 6.4668627],
+                [2.1793516, -0.81108296, -1.3682691],
+                [8.998467, -5.613649, -3.3848193],
+            ],
+            dtype=np.float32,
+        ),
+        rtol=1e-5,
+        atol=1e-5,
+    )
 
 
 def submit_op_logsoftmax():
@@ -559,8 +568,7 @@ def test_op_logsumexp_forward_4():
 
 def test_op_logsumexp_forward_5():
     test_data = ndl.ops.logsumexp(
-        ndl.Tensor(np.array([[1e10, 1e9, 1e8, -10], [1e-10, 1e9, 1e8, -10]])),
-        (0,)
+        ndl.Tensor(np.array([[1e10, 1e9, 1e8, -10], [1e-10, 1e9, 1e8, -10]])), (0,)
     ).numpy()
     np.testing.assert_allclose(
         test_data,
@@ -636,8 +644,7 @@ def test_op_logsumexp_backward_3():
 
 
 def test_op_logsumexp_backward_5():
-    grad_compare = ndl.Tensor(
-        np.array([[1e10, 1e9, 1e8, -10], [1e-10, 1e9, 1e8, -10]]))
+    grad_compare = ndl.Tensor(np.array([[1e10, 1e9, 1e8, -10], [1e-10, 1e9, 1e8, -10]]))
     test_data = (ndl.ops.logsumexp(grad_compare, (0,)) ** 2).sum().backward()
     np.testing.assert_allclose(
         grad_compare.grad.cached_data,
@@ -747,11 +754,9 @@ def test_init_xavier_normal():
         ndl.init.xavier_normal(3, 5, gain=0.33).numpy(),
         np.array(
             [
-                [0.08195783, -0.022813609, 0.10686861, 0.25129992,
-                 -0.038635306],
+                [0.08195783, -0.022813609, 0.10686861, 0.25129992, -0.038635306],
                 [-0.038632598, 0.2605701, 0.12662673, -0.07746328, 0.08952241],
-                [-0.07646392, -0.07684541, 0.039923776, -0.31569123,
-                 -0.28461143],
+                [-0.07646392, -0.07684541, 0.039923776, -0.31569123, -0.28461143],
             ],
             dtype=np.float32,
         ),
@@ -773,15 +778,13 @@ def test_nn_linear_weight_init_1():
         nn_linear_weight_init(),
         np.array(
             [
-                [-4.4064468e-01, -6.3199449e-01, -4.1082984e-01,
-                 -7.5330488e-02],
+                [-4.4064468e-01, -6.3199449e-01, -4.1082984e-01, -7.5330488e-02],
                 [-3.3144259e-01, 3.4056887e-02, -4.4079605e-01, 8.8153863e-01],
                 [4.3108878e-01, -7.1237373e-01, -2.1057765e-01, 2.3793796e-01],
                 [-6.9425780e-01, 8.9535803e-01, -1.0512712e-01, 5.3615785e-01],
                 [5.4460180e-01, -2.5689366e-01, -1.5534532e-01, 1.5601574e-01],
                 [4.8174453e-01, -5.7806653e-01, -3.9223823e-01, 3.1518409e-01],
-                [-6.5129338e-04, -5.9517515e-01, -1.6083106e-01,
-                 -5.5698222e-01],
+                [-6.5129338e-04, -5.9517515e-01, -1.6083106e-01, -5.5698222e-01],
             ],
             dtype=np.float32,
         ),
@@ -802,8 +805,7 @@ def test_nn_linear_bias_init_1():
 def test_nn_linear_forward_1():
     np.testing.assert_allclose(
         linear_forward((10, 5), (1, 10)),
-        np.array([[3.849948, 9.50499, 2.38029, 5.572587, 5.668391]],
-                 dtype=np.float32),
+        np.array([[3.849948, 9.50499, 2.38029, 5.572587, 5.668391]], dtype=np.float32),
         rtol=1e-5,
         atol=1e-5,
     )
@@ -1312,8 +1314,7 @@ def test_nn_layernorm_backward_3():
     np.testing.assert_allclose(
         layernorm_backward((1, 5), 5),
         np.array(
-            [[0.150192, 0.702322, -3.321343, 0.31219, 2.156639]],
-            dtype=np.float32
+            [[0.150192, 0.702322, -3.321343, 0.31219, 2.156639]], dtype=np.float32
         ),
         rtol=1e-5,
         atol=1e-5,
@@ -1501,8 +1502,7 @@ def submit_nn_batchnorm():
 def test_nn_dropout_forward_1():
     np.testing.assert_allclose(
         dropout_forward((2, 3), prob=0.45),
-        np.array([[6.818182, 0.0, 0.0], [0.18181819, 0.0, 6.090909]],
-                 dtype=np.float32),
+        np.array([[6.818182, 0.0, 0.0], [0.18181819, 0.0, 6.090909]], dtype=np.float32),
         rtol=1e-5,
         atol=1e-5,
     )
@@ -1512,8 +1512,7 @@ def test_nn_dropout_backward_1():
     np.testing.assert_allclose(
         dropout_backward((2, 3), prob=0.26),
         np.array(
-            [[1.3513514, 0.0, 0.0], [1.3513514, 0.0, 1.3513514]],
-            dtype=np.float32
+            [[1.3513514, 0.0, 0.0], [1.3513514, 0.0, 1.3513514]], dtype=np.float32
         ),
         rtol=1e-5,
         atol=1e-5,
@@ -1570,8 +1569,7 @@ def test_nn_flatten_forward_1():
     np.testing.assert_allclose(
         flatten_forward(3, 3),
         np.array(
-            [[2.1, 0.95, 3.45], [3.1, 2.45, 2.3], [3.3, 0.4, 1.2]],
-            dtype=np.float32
+            [[2.1, 0.95, 3.45], [3.1, 2.45, 2.3], [3.3, 0.4, 1.2]], dtype=np.float32
         ),
         rtol=1e-5,
         atol=1e-5,
@@ -1799,8 +1797,7 @@ def test_nn_flatten_forward_4():
 def test_nn_flatten_backward_1():
     np.testing.assert_allclose(
         flatten_backward(3, 3),
-        np.array([[4.2, 1.9, 6.9], [6.2, 4.9, 4.6], [6.6, 0.8, 2.4]],
-                 dtype=np.float32),
+        np.array([[4.2, 1.9, 6.9], [6.2, 4.9, 4.6], [6.6, 0.8, 2.4]], dtype=np.float32),
         rtol=1e-5,
         atol=1e-5,
     )
@@ -1843,10 +1840,8 @@ def test_nn_flatten_backward_4():
         np.array(
             [
                 [
-                    [[8.4, 9.0, 3.8, 9.7], [9.7, 6.6, 5.4, 6.1],
-                     [0.6, 7.3, 6.2, 0.2]],
-                    [[9.0, 8.1, 6.1, 0.3], [6.0, 3.3, 9.7, 2.6],
-                     [7.9, 5.8, 2.4, 2.0]],
+                    [[8.4, 9.0, 3.8, 9.7], [9.7, 6.6, 5.4, 6.1], [0.6, 7.3, 6.2, 0.2]],
+                    [[9.0, 8.1, 6.1, 0.3], [6.0, 3.3, 9.7, 2.6], [7.9, 5.8, 2.4, 2.0]],
                 ]
             ],
             dtype=np.float32,
@@ -1913,8 +1908,7 @@ def test_optim_sgd_vanilla_1():
         learn_model_1d(
             64,
             16,
-            lambda z: nn.Sequential(nn.Linear(64, 32), nn.ReLU(),
-                                    nn.Linear(32, 16)),
+            lambda z: nn.Sequential(nn.Linear(64, 32), nn.ReLU(), nn.Linear(32, 16)),
             ndl.optim.SGD,
             lr=0.01,
             momentum=0.0,
@@ -1930,8 +1924,7 @@ def test_optim_sgd_momentum_1():
         learn_model_1d(
             64,
             16,
-            lambda z: nn.Sequential(nn.Linear(64, 32), nn.ReLU(),
-                                    nn.Linear(32, 16)),
+            lambda z: nn.Sequential(nn.Linear(64, 32), nn.ReLU(), nn.Linear(32, 16)),
             ndl.optim.SGD,
             lr=0.01,
             momentum=0.9,
@@ -1947,8 +1940,7 @@ def test_optim_sgd_weight_decay_1():
         learn_model_1d(
             64,
             16,
-            lambda z: nn.Sequential(nn.Linear(64, 32), nn.ReLU(),
-                                    nn.Linear(32, 16)),
+            lambda z: nn.Sequential(nn.Linear(64, 32), nn.ReLU(), nn.Linear(32, 16)),
             ndl.optim.SGD,
             lr=0.01,
             momentum=0.0,
@@ -1965,8 +1957,7 @@ def test_optim_sgd_momentum_weight_decay_1():
         learn_model_1d(
             64,
             16,
-            lambda z: nn.Sequential(nn.Linear(64, 32), nn.ReLU(),
-                                    nn.Linear(32, 16)),
+            lambda z: nn.Sequential(nn.Linear(64, 32), nn.ReLU(), nn.Linear(32, 16)),
             ndl.optim.SGD,
             lr=0.01,
             momentum=0.9,
@@ -2014,8 +2005,7 @@ def submit_optim_sgd():
         learn_model_1d(
             48,
             17,
-            lambda z: nn.Sequential(nn.Linear(48, 32), nn.ReLU(),
-                                    nn.Linear(32, 17)),
+            lambda z: nn.Sequential(nn.Linear(48, 32), nn.ReLU(), nn.Linear(32, 17)),
             ndl.optim.SGD,
             lr=0.03,
             momentum=0.0,
@@ -2026,8 +2016,7 @@ def submit_optim_sgd():
         learn_model_1d(
             48,
             16,
-            lambda z: nn.Sequential(nn.Linear(48, 32), nn.ReLU(),
-                                    nn.Linear(32, 16)),
+            lambda z: nn.Sequential(nn.Linear(48, 32), nn.ReLU(), nn.Linear(32, 16)),
             ndl.optim.SGD,
             lr=0.01,
             momentum=0.9,
@@ -2039,8 +2028,7 @@ def submit_optim_sgd():
             48,
             16,
             lambda z: nn.Sequential(
-                nn.Linear(48, 32), nn.ReLU(), nn.BatchNorm1d(32),
-                nn.Linear(32, 16)
+                nn.Linear(48, 32), nn.ReLU(), nn.BatchNorm1d(32), nn.Linear(32, 16)
             ),
             ndl.optim.SGD,
             lr=0.01,
@@ -2053,8 +2041,7 @@ def submit_optim_sgd():
         learn_model_1d(
             54,
             16,
-            lambda z: nn.Sequential(nn.Linear(54, 32), nn.ReLU(),
-                                    nn.Linear(32, 16)),
+            lambda z: nn.Sequential(nn.Linear(54, 32), nn.ReLU(), nn.Linear(32, 16)),
             ndl.optim.SGD,
             lr=0.01,
             momentum=0.9,
@@ -2085,8 +2072,7 @@ def test_optim_adam_1():
         learn_model_1d(
             64,
             16,
-            lambda z: nn.Sequential(nn.Linear(64, 32), nn.ReLU(),
-                                    nn.Linear(32, 16)),
+            lambda z: nn.Sequential(nn.Linear(64, 32), nn.ReLU(), nn.Linear(32, 16)),
             ndl.optim.Adam,
             lr=0.001,
         ),
@@ -2101,8 +2087,7 @@ def test_optim_adam_weight_decay_1():
         learn_model_1d(
             64,
             16,
-            lambda z: nn.Sequential(nn.Linear(64, 32), nn.ReLU(),
-                                    nn.Linear(32, 16)),
+            lambda z: nn.Sequential(nn.Linear(64, 32), nn.ReLU(), nn.Linear(32, 16)),
             ndl.optim.Adam,
             lr=0.001,
             weight_decay=0.01,
@@ -2119,8 +2104,7 @@ def test_optim_adam_batchnorm_1():
             64,
             16,
             lambda z: nn.Sequential(
-                nn.Linear(64, 32), nn.ReLU(), nn.BatchNorm1d(32),
-                nn.Linear(32, 16)
+                nn.Linear(64, 32), nn.ReLU(), nn.BatchNorm1d(32), nn.Linear(32, 16)
             ),
             ndl.optim.Adam,
             lr=0.001,
@@ -2138,8 +2122,7 @@ def test_optim_adam_batchnorm_eval_mode_1():
             64,
             16,
             lambda z: nn.Sequential(
-                nn.Linear(64, 32), nn.ReLU(), nn.BatchNorm1d(32),
-                nn.Linear(32, 16)
+                nn.Linear(64, 32), nn.ReLU(), nn.BatchNorm1d(32), nn.Linear(32, 16)
             ),
             ndl.optim.Adam,
             lr=0.001,
@@ -2157,8 +2140,7 @@ def test_optim_adam_layernorm_1():
             64,
             16,
             lambda z: nn.Sequential(
-                nn.Linear(64, 32), nn.ReLU(), nn.LayerNorm1d(32),
-                nn.Linear(32, 16)
+                nn.Linear(64, 32), nn.ReLU(), nn.LayerNorm1d(32), nn.Linear(32, 16)
             ),
             ndl.optim.Adam,
             lr=0.01,
@@ -2175,8 +2157,7 @@ def test_optim_adam_weight_decay_bias_correction_1():
         learn_model_1d(
             64,
             16,
-            lambda z: nn.Sequential(nn.Linear(64, 32), nn.ReLU(),
-                                    nn.Linear(32, 16)),
+            lambda z: nn.Sequential(nn.Linear(64, 32), nn.ReLU(), nn.Linear(32, 16)),
             ndl.optim.Adam,
             lr=0.001,
             weight_decay=0.01,
@@ -2200,8 +2181,7 @@ def submit_optim_adam():
         learn_model_1d(
             48,
             16,
-            lambda z: nn.Sequential(nn.Linear(48, 32), nn.ReLU(),
-                                    nn.Linear(32, 16)),
+            lambda z: nn.Sequential(nn.Linear(48, 32), nn.ReLU(), nn.Linear(32, 16)),
             ndl.optim.Adam,
             lr=0.001,
             epochs=2,
@@ -2211,8 +2191,7 @@ def submit_optim_adam():
         learn_model_1d(
             48,
             16,
-            lambda z: nn.Sequential(nn.Linear(48, 32), nn.ReLU(),
-                                    nn.Linear(32, 16)),
+            lambda z: nn.Sequential(nn.Linear(48, 32), nn.ReLU(), nn.Linear(32, 16)),
             ndl.optim.Adam,
             lr=0.001,
             weight_decay=0.01,
@@ -2224,8 +2203,7 @@ def submit_optim_adam():
             48,
             16,
             lambda z: nn.Sequential(
-                nn.Linear(48, 32), nn.ReLU(), nn.BatchNorm1d(32),
-                nn.Linear(32, 16)
+                nn.Linear(48, 32), nn.ReLU(), nn.BatchNorm1d(32), nn.Linear(32, 16)
             ),
             ndl.optim.Adam,
             lr=0.001,
@@ -2238,8 +2216,7 @@ def submit_optim_adam():
             48,
             16,
             lambda z: nn.Sequential(
-                nn.Linear(48, 32), nn.ReLU(), nn.BatchNorm1d(32),
-                nn.Linear(32, 16)
+                nn.Linear(48, 32), nn.ReLU(), nn.BatchNorm1d(32), nn.Linear(32, 16)
             ),
             ndl.optim.Adam,
             lr=0.001,
@@ -2252,8 +2229,7 @@ def submit_optim_adam():
             48,
             16,
             lambda z: nn.Sequential(
-                nn.Linear(48, 32), nn.ReLU(), nn.LayerNorm1d(32),
-                nn.Linear(32, 16)
+                nn.Linear(48, 32), nn.ReLU(), nn.LayerNorm1d(32), nn.Linear(32, 16)
             ),
             ndl.optim.Adam,
             lr=0.01,
@@ -2265,8 +2241,7 @@ def submit_optim_adam():
         learn_model_1d(
             48,
             16,
-            lambda z: nn.Sequential(nn.Linear(48, 32), nn.ReLU(),
-                                    nn.Linear(32, 16)),
+            lambda z: nn.Sequential(nn.Linear(48, 32), nn.ReLU(), nn.Linear(32, 16)),
             ndl.optim.Adam,
             lr=0.001,
             weight_decay=0.01,
@@ -2412,8 +2387,7 @@ def test_mlp_train_epoch_1():
 
 def test_mlp_eval_epoch_1():
     np.testing.assert_allclose(
-        eval_epoch_1(10, 150), np.array([0.9164, 4.137814]), rtol=1e-5,
-        atol=1e-5
+        eval_epoch_1(10, 150), np.array([0.9164, 4.137814]), rtol=1e-5, atol=1e-5
     )
 
 
@@ -2434,7 +2408,6 @@ def submit_mlp_resnet():
     mugrade.submit(mlp_resnet_num_params(15, 10, 10, 5, nn.BatchNorm1d))
     mugrade.submit(mlp_resnet_forward(12, 7, 1, 6, nn.LayerNorm1d, 0.8))
     mugrade.submit(mlp_resnet_forward(15, 3, 2, 15, nn.BatchNorm1d, 0.3))
-    mugrade.submit(
-        train_epoch_1(7, 256, ndl.optim.Adam, lr=0.01, weight_decay=0.01))
+    mugrade.submit(train_epoch_1(7, 256, ndl.optim.Adam, lr=0.01, weight_decay=0.01))
     mugrade.submit(eval_epoch_1(12, 154))
     mugrade.submit(train_mnist_1(550, 1, ndl.optim.SGD, 0.01, 0.01, 7))

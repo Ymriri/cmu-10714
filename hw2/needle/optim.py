@@ -1,10 +1,14 @@
 """Optimization module"""
+from typing import List
+
 import needle as ndl
 import numpy as np
 
+from needle.nn import Parameter
+
 
 class Optimizer:
-    def __init__(self, params):
+    def __init__(self, params: List[Parameter]):
         self.params = params
 
     def step(self):
@@ -16,7 +20,9 @@ class Optimizer:
 
 
 class SGD(Optimizer):
-    def __init__(self, params, lr=0.01, momentum=0.0, weight_decay=0.0):
+    def __init__(
+        self, params: List[Parameter], lr=0.01, momentum=0.0, weight_decay=0.0
+    ):
         super().__init__(params)
         self.lr = lr
         self.momentum = momentum
@@ -27,7 +33,7 @@ class SGD(Optimizer):
         for p in self.params:
             assert isinstance(p, ndl.Tensor)
             grad = p.grad.data + self.weight_decay * p.data
-            u = self.u.get(p, 0)
+            u = self.u.get(p, 0.0)
             u = self.momentum * u + (1 - self.momentum) * grad
             self.u[p] = u.detach()
 
@@ -44,13 +50,13 @@ class SGD(Optimizer):
 
 class Adam(Optimizer):
     def __init__(
-            self,
-            params,
-            lr=0.01,
-            beta1=0.9,
-            beta2=0.999,
-            eps=1e-8,
-            weight_decay=0.0,
+        self,
+        params,
+        lr=0.01,
+        beta1=0.9,
+        beta2=0.999,
+        eps=1e-8,
+        weight_decay=0.0,
     ):
         super().__init__(params)
         self.lr = lr
@@ -60,10 +66,19 @@ class Adam(Optimizer):
         self.weight_decay = weight_decay
         self.t = 0
 
-        self.m = {}
+        self.u = {}
         self.v = {}
 
     def step(self):
-        ### BEGIN YOUR SOLUTION
-        raise NotImplementedError()
-        ### END YOUR SOLUTION
+        self.t += 1
+        for p in self.params:
+            grad = p.grad + self.weight_decay * p
+            u = self.u.get(p, 0.0)
+            v = self.v.get(p, 0.0)
+            u = self.beta1 * u + (1 - self.beta1) * grad
+            v = self.beta2 * v + (1 - self.beta2) * (grad**2.0)
+            self.u[p] = u.detach()
+            self.v[p] = v.detach()
+            u_hat = u / (1.0 - self.beta1**self.t)
+            v_hat = v / (1.0 - self.beta2**self.t)
+            p.data = (p - self.lr * u_hat / (v_hat**0.5 + self.eps)).detach()

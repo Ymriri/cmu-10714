@@ -4,7 +4,6 @@ from ..autograd import Tensor
 from typing import Iterator, Optional, List, Sized, Union, Iterable, Any
 
 
-
 class Dataset:
     r"""An abstract class representing a `Dataset`.
 
@@ -16,12 +15,12 @@ class Dataset:
     def __init__(self, transforms: Optional[List] = None):
         self.transforms = transforms
 
-    def __getitem__(self, index) -> object:
+    def __getitem__(self, index) -> tuple:
         raise NotImplementedError
 
     def __len__(self) -> int:
         raise NotImplementedError
-    
+
     def apply_transforms(self, x):
         if self.transforms is not None:
             # apply the transforms
@@ -40,7 +39,7 @@ class DataLoader:
             (default: ``1``).
         shuffle (bool, optional): set to ``True`` to have the data reshuffled
             at every epoch (default: ``False``).
-     """
+    """
     dataset: Dataset
     batch_size: Optional[int]
 
@@ -50,22 +49,27 @@ class DataLoader:
         batch_size: Optional[int] = 1,
         shuffle: bool = False,
     ):
-
         self.dataset = dataset
         self.shuffle = shuffle
         self.batch_size = batch_size
+        self.batches = None
         if not self.shuffle:
-            self.ordering = np.array_split(np.arange(len(dataset)), 
-                                           range(batch_size, len(dataset), batch_size))
+            self.ordering = np.array_split(
+                np.arange(len(dataset)), range(batch_size, len(dataset), batch_size)
+            )
 
     def __iter__(self):
-        ### BEGIN YOUR SOLUTION
-        raise NotImplementedError()
-        ### END YOUR SOLUTION
+        if self.shuffle:
+            ordering = np.array_split(
+                np.random.permutation(np.arange(len(self.dataset))),
+                range(self.batch_size, len(self.dataset), self.batch_size),
+            )
+        else:
+            ordering = self.ordering
+
+        self.batches = iter(ordering)
         return self
 
     def __next__(self):
-        ### BEGIN YOUR SOLUTION
-        raise NotImplementedError()
-        ### END YOUR SOLUTION
-
+        batch = next(self.batches)
+        return tuple(Tensor(v) for v in self.dataset[batch])

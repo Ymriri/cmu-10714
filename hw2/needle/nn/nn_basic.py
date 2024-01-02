@@ -1,17 +1,18 @@
 """The module.
 """
-from typing import List, Callable, Any, Optional
+from abc import abstractmethod
+from typing import List, Optional
+
 from needle.autograd import Tensor
 from needle import ops
 import needle.init as init
-import numpy as np
 
 
 class Parameter(Tensor):
     """A special kind of tensor that represents parameters."""
 
 
-def _unpack_params(value: object) -> List[Tensor]:
+def _unpack_params(value: object) -> List[Parameter]:
     if isinstance(value, Parameter):
         return [value]
     elif isinstance(value, Module):
@@ -24,7 +25,8 @@ def _unpack_params(value: object) -> List[Tensor]:
     elif isinstance(value, (list, tuple)):
         params = []
         for v in value:
-            params += _unpack_params(v)
+            foo = _unpack_params(v)
+            params += foo
         return params
     else:
         return []
@@ -53,7 +55,7 @@ class Module:
     def __init__(self):
         self.training = True
 
-    def parameters(self) -> List[Tensor]:
+    def parameters(self) -> List[Parameter]:
         """Return the list of parameters in the module."""
         return _unpack_params(self.__dict__)
 
@@ -70,8 +72,12 @@ class Module:
         for m in self._children():
             m.training = True
 
-    def __call__(self, *args, **kwargs):
+    def __call__(self, *args, **kwargs) -> Tensor:
         return self.forward(*args, **kwargs)
+
+    @abstractmethod
+    def forward(self, *args, **kwargs) -> Tensor:
+        raise NotImplementedError
 
 
 class Identity(Module):
@@ -81,17 +87,22 @@ class Identity(Module):
 
 class Linear(Module):
     def __init__(
-            self, in_features, out_features, bias=True, device=None,
-            dtype="float32"
+        self, in_features, out_features, bias=True, device=None, dtype="float32"
     ):
         super().__init__()
         self.in_features = in_features
         self.out_features = out_features
 
-        self.weight = init.kaiming_uniform(in_features, out_features)
+        self.weight = Parameter(
+            init.kaiming_uniform(in_features, out_features, device=device, dtype=dtype)
+        )
         self.bias: Optional[Tensor] = None
         if bias:
-            self.bias = init.kaiming_uniform(out_features, 1).transpose()
+            self.bias = Parameter(
+                init.kaiming_uniform(
+                    out_features, 1, device=device, dtype=dtype
+                ).transpose()
+            )
 
     def forward(self, X: Tensor) -> Tensor:
         result = X @ self.weight
@@ -101,10 +112,12 @@ class Linear(Module):
 
 
 class Flatten(Module):
-    def forward(self, X):
-        ### BEGIN YOUR SOLUTION
-        raise NotImplementedError()
-        ### END YOUR SOLUTION
+    def forward(self, X: Tensor):
+        assert len(X.shape) > 0
+        cardinality = 1
+        for dim in X.shape[1:]:
+            cardinality *= dim
+        return X.reshape((X.shape[0], cardinality))
 
 
 class ReLU(Module):
@@ -125,24 +138,24 @@ class Sequential(Module):
 
 class SoftmaxLoss(Module):
     def forward(self, logits: Tensor, y: Tensor):
+        assert logits.shape[0] == y.shape[0]
         num_examples, num_classes = logits.shape
-        y = init.one_hot(num_classes, y)
-        return (
-                ops.logsumexp(logits, (1,)).sum() - (logits * y).sum()
-        ) / num_examples
+        y = init.one_hot(num_classes, y, dtype=logits.dtype)
+        a = ops.logsumexp(logits, (1,)).sum()
+        b = (logits * y).sum()
+        return (a - b) / num_examples
 
 
 class BatchNorm1d(Module):
-    def __init__(self, dim, eps=1e-5, momentum=0.1, device=None,
-                 dtype="float32"):
+    def __init__(self, dim, eps=1e-5, momentum=0.1, device=None, dtype="float32"):
         super().__init__()
         self.dim = dim
         self.eps = eps
         self.momentum = momentum
-        self.running_mean = init.zeros(dim)
-        self.running_var = init.ones(dim)
-        self.weight = init.ones(dim)
-        self.bias = init.zeros(dim)
+        self.running_mean = init.zeros(dim, device=device, dtype=dtype)
+        self.running_var = init.ones(dim, device=device, dtype=dtype)
+        self.weight = Parameter(init.ones(dim))
+        self.bias = Parameter(init.zeros(dim))
 
     def forward(self, x: Tensor) -> Tensor:
         assert x.shape[1] == self.dim
@@ -150,7 +163,7 @@ class BatchNorm1d(Module):
         if not self.training:
             mean = self.running_mean.broadcast_to(x.shape)
             var = self.running_var.broadcast_to(x.shape)
-            normalized = (x - mean) / (var + self.eps) ** .5
+            normalized = (x - mean) / (var + self.eps) ** 0.5
             weight = self.weight.broadcast_to(x.shape).data
             bias = self.bias.broadcast_to(x.shape).data
             return normalized.data * weight + bias
@@ -164,16 +177,13 @@ class BatchNorm1d(Module):
         return normalized * weight + bias
 
 
-
-
 class LayerNorm1d(Module):
-
     def __init__(self, dim, eps=1e-5, device=None, dtype="float32"):
         super().__init__()
         self.dim = dim
         self.eps = eps
-        self.weight = init.ones(dim)
-        self.bias = init.zeros(dim)
+        self.weight = Parameter(init.ones(dim, device=device, dtype=dtype))
+        self.bias = Parameter(init.zeros(dim, device=device, dtype=dtype))
 
     def forward(self, x: Tensor) -> Tensor:
         assert x.shape[1] == self.dim
@@ -190,9 +200,10 @@ class Dropout(Module):
         self.p = p
 
     def forward(self, x: Tensor) -> Tensor:
-        gain = init.randb(*x.shape, p=self.p) / (1. - self.p)
+        if self.p <= 0:
+            return x
+        gain = init.randb(*x.shape, p=self.p, dtype=x.dtype) / (1.0 - self.p)
         return x * gain
-
 
 
 class Residual(Module):
@@ -212,7 +223,7 @@ def normalize(x: Tensor, eps: float, axis: int):
     broadcast_mean = mean.reshape(keepdim_shape).broadcast_to(x.shape)
     var = ((x - broadcast_mean) ** 2).sum(axes) / dim
     broadcast_var = var.reshape(keepdim_shape).broadcast_to(x.shape)
-    normalized = (x - broadcast_mean) / (broadcast_var + eps) ** .5
+    normalized = (x - broadcast_mean) / (broadcast_var + eps) ** 0.5
     return mean, var, normalized
 
 

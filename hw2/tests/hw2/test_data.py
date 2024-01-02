@@ -10898,6 +10898,7 @@ def test_dataloader_ndarray():
         )
 
         for i, batch in enumerate(train_dataloader):
+            # the test expect Sequence[Tensor]
             batch_x = batch[0].numpy()
             truth_x = train_dataset[i * batch_size : (i + 1) * batch_size][0].reshape(
                 (batch_size, 10, 10)

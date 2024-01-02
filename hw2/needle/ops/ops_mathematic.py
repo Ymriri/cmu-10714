@@ -14,16 +14,24 @@ import numpy
 import numpy as array_api
 
 
-# NOTE: implicit broadcasting is not supported yet.
+# NOTE: implicit broadcasting is not supported yet from some Op.
 # We detect incorrectly relying on implicit broadcasting by shape checking.
+
 
 class EWiseAdd(TensorOp):
     def compute(self, a: NDArray, b: NDArray):
-        assert a.shape == b.shape, f"a={a.shape}, b={b.shape}"
+        assert a.dtype == b.dtype, f"{a.dtype}, {b.dtype}"
         return a + b
 
     def gradient(self, out_grad: Tensor, node: Tensor):
-        return out_grad, out_grad
+        a, b = node.inputs
+        a_axes = get_broadcast_axes(a.shape, out_grad.shape)
+        b_axes = get_broadcast_axes(b.shape, out_grad.shape)
+        a_grad = out_grad.sum(a_axes).reshape(a.shape)
+        b_grad = out_grad.sum(b_axes).reshape(b.shape)
+        assert a_grad.shape == a.shape
+        assert b_grad.shape == b.shape
+        return a_grad, b_grad
 
 
 def add(a, b):
@@ -36,7 +44,7 @@ class AddScalar(TensorOp):
         self.scalar = scalar
 
     def compute(self, a: NDArray):
-        return a + self.scalar
+        return a + array_api.array(self.scalar, dtype=a.dtype)
 
     def gradient(self, out_grad: Tensor, node: Tensor):
         return out_grad
@@ -49,6 +57,7 @@ def add_scalar(a, scalar):
 class EWiseMul(TensorOp):
     def compute(self, a: NDArray, b: NDArray):
         assert a.shape == b.shape, f"a={a.shape}, b={b.shape}"
+        assert a.dtype == b.dtype
         return a * b
 
     def gradient(self, out_grad: Tensor, node: Tensor):
@@ -62,10 +71,11 @@ def multiply(a, b):
 
 class MulScalar(TensorOp):
     def __init__(self, scalar):
+        assert isinstance(scalar, (int, float)), scalar
         self.scalar = scalar
 
     def compute(self, a: NDArray):
-        return a * self.scalar
+        return a * array_api.array(self.scalar, dtype=a.dtype)
 
     def gradient(self, out_grad: Tensor, node: Tensor):
         return (out_grad * self.scalar,)
@@ -79,15 +89,17 @@ class PowerScalar(TensorOp):
     """Op raise a tensor to an (integer) power."""
 
     def __init__(self, scalar: int):
+        assert isinstance(scalar, (int, float))
         self.scalar = scalar
 
     def compute(self, a: NDArray) -> NDArray:
-        return a ** self.scalar
+        res = a ** array_api.array(self.scalar, dtype=a.dtype)
+        assert res.dtype == a.dtype
+        return res
 
     def gradient(self, out_grad: Tensor, node: Tensor):
         a = node.inputs[0]
-        return array_api.multiply(out_grad,
-                                  a ** (self.scalar - 1) * self.scalar)
+        return array_api.multiply(out_grad, a ** (self.scalar - 1) * self.scalar)
 
 
 def power_scalar(a, scalar):
@@ -99,17 +111,18 @@ class EWisePow(TensorOp):
 
     def compute(self, a: NDArray, b: NDArray) -> NDArray:
         assert a.shape == b.shape, f"a={a.shape}, b={b.shape}"
-        return a ** b
+        assert a.dtype == b.dtype
+        return a**b
 
     def gradient(self, out_grad: Tensor, node: Tensor):
         if not isinstance(node.inputs[0], NDArray) or not isinstance(
-                node.inputs[1], NDArray
+            node.inputs[1], NDArray
         ):
             raise ValueError("Both inputs must be tensors (NDArray).")
 
         a, b = node.inputs
         grad_a = out_grad * b * (a ** (b - 1))
-        grad_b = out_grad * (a ** b) * array_api.log(a.data)
+        grad_b = out_grad * (a**b) * array_api.log(a.data)
         return grad_a, grad_b
 
 
@@ -122,11 +135,12 @@ class EWiseDiv(TensorOp):
 
     def compute(self, a: NDArray, b: NDArray):
         assert a.shape == b.shape, f"a={a.shape}, b={b.shape}"
+        assert a.dtype == b.dtype, f"{a.dtype}, {b.dtype}"
         return a / b
 
     def gradient(self, out_grad: Tensor, node: Tensor):
         lhs, rhs = node.inputs
-        return out_grad / rhs, - out_grad * lhs / (rhs ** 2.)
+        return out_grad / rhs, -out_grad * lhs / (rhs**2.0)
 
 
 def divide(a, b):
@@ -135,10 +149,13 @@ def divide(a, b):
 
 class DivScalar(TensorOp):
     def __init__(self, scalar):
+        assert isinstance(scalar, (int, float))
         self.scalar = scalar
 
     def compute(self, a: NDArray):
-        return a / self.scalar
+        result = a / array_api.array(self.scalar, dtype=a.dtype)
+        assert result.dtype == a.dtype, f"{result.dtype}, {a.dtype}"
+        return result
 
     def gradient(self, out_grad: Tensor, node: Tensor):
         return out_grad / self.scalar
@@ -204,7 +221,7 @@ class BroadcastTo(TensorOp):
         # TODO(zhangfan): Not a fan of it since it feels hacky.
         #   the reshape is needed since axes can remove the dimensions
         #   that suppose to exists. the proper fix would be to keep 1-sized dims.
-        return out_grad.sum(tuple(axes)).reshape(a.shape)
+        return out_grad.sum(axes).reshape(a.shape)
 
 
 def broadcast_to(a, shape):
@@ -234,8 +251,6 @@ def summation(a, axes=None):
 
 class MatMul(TensorOp):
     def compute(self, a: NDArray, b: NDArray):
-        assert len(a.shape) == len(b.shape)
-        assert a.shape[:-2] == b.shape[:-2]
         assert a.shape[-1] == b.shape[-2]
         return a @ b
 
@@ -254,10 +269,12 @@ class MatMul(TensorOp):
         lhs_grad = out_grad @ rhs.transpose()  # n x k @ k x m = n x m
         rhs_grad = lhs.transpose() @ out_grad  # m x n @ n x k = m x n
 
-        lhs_grad = lhs_grad.sum(
-            get_broadcast_axes(lhs.shape, lhs_grad.shape)).reshape(lhs.shape)
-        rhs_grad = rhs_grad.sum(
-            get_broadcast_axes(rhs.shape, rhs_grad.shape)).reshape(rhs.shape)
+        lhs_grad = lhs_grad.sum(get_broadcast_axes(lhs.shape, lhs_grad.shape)).reshape(
+            lhs.shape
+        )
+        rhs_grad = rhs_grad.sum(get_broadcast_axes(rhs.shape, rhs_grad.shape)).reshape(
+            rhs.shape
+        )
 
         return lhs_grad, rhs_grad
 
@@ -315,9 +332,9 @@ class ReLU(TensorOp):
         return a * (a > 0)
 
     def gradient(self, out_grad: Tensor, node: Tensor):
-        a = node.inputs[0]
-        assert isinstance(a, Tensor)
-        return out_grad * (a.realize_cached_data() > 0)
+        a = node.inputs[0].realize_cached_data()
+        mask = Tensor(array_api.array(a > 0, dtype=out_grad.dtype))
+        return out_grad * mask
 
 
 def relu(a):
@@ -340,6 +357,9 @@ def get_broadcast_axes(old: tuple, new: tuple):
 def get_squashed_shape(axes: Optional[tuple], shape: tuple) -> tuple:
     """Return the shape after squashing axes without reducing dimensions.
     If axes is None, default to all axes of the shape.
+
+    Examples:
+        assert get_squashed_shape(axes=(1, 3), shape=(3,4,5,6,7)) == (3,1,5,1,7)
     """
     axes = axes if axes else range(len(shape))
     squashed = list(shape)

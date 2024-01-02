@@ -1,4 +1,6 @@
 """Core data structures."""
+import numpy as np
+
 import needle
 from .backend_numpy import Device, cpu, all_devices
 from typing import List, Optional, NamedTuple, Tuple, Union, Set, Dict
@@ -41,7 +43,7 @@ class Op:
         raise NotImplementedError()
 
     def gradient(
-            self, out_grad: "Value", node: "Value"
+        self, out_grad: "Value", node: "Value"
     ) -> Union["Value", Tuple["Value"]]:
         """Compute partial adjoint for each input value for a given output adjoint.
 
@@ -61,8 +63,7 @@ class Op:
         """
         raise NotImplementedError()
 
-    def gradient_as_tuple(self, out_grad: "Value", node: "Value") -> Tuple[
-        "Value"]:
+    def gradient_as_tuple(self, out_grad: "Value", node: "Value") -> Tuple["Value"]:
         """Convenience method to always return a tuple from gradient call"""
         output = self.gradient(out_grad, node)
         if isinstance(output, tuple):
@@ -98,7 +99,7 @@ class Value:
     cached_data: NDArray
     requires_grad: bool
 
-    def realize_cached_data(self):
+    def realize_cached_data(self) -> NDArray:
         """Run compute to realize the cached data"""
         # avoid recomputation
         if self.cached_data is not None:
@@ -117,13 +118,13 @@ class Value:
         TENSOR_COUNTER -= 1
 
     def _init(
-            self,
-            op: Optional[Op],
-            inputs: List["Tensor"],
-            *,
-            num_outputs: int = 1,
-            cached_data: List[object] = None,
-            requires_grad: Optional[bool] = None
+        self,
+        op: Optional[Op],
+        inputs: List["Tensor"],
+        *,
+        num_outputs: int = 1,
+        cached_data: List[object] = None,
+        requires_grad: Optional[bool] = None,
     ):
         global TENSOR_COUNTER
         TENSOR_COUNTER += 1
@@ -184,8 +185,7 @@ class TensorTuple(Value):
     def __add__(self, other):
         assert isinstance(other, TensorTuple)
         assert len(self) == len(other)
-        return needle.ops.make_tuple(
-            *[self[i] + other[i] for i in range(len(self))])
+        return needle.ops.make_tuple(*[self[i] + other[i] for i in range(len(self))])
 
     def detach(self):
         """Create a new tensor that shares the data but detaches from the graph."""
@@ -196,13 +196,13 @@ class Tensor(Value):
     grad: "Tensor"
 
     def __init__(
-            self,
-            array,
-            *,
-            device: Optional[Device] = None,
-            dtype=None,
-            requires_grad=True,
-            **kwargs
+        self,
+        array,
+        *,
+        device: Optional[Device] = None,
+        dtype=None,
+        requires_grad=True,
+        **kwargs,
     ):
         if isinstance(array, Tensor):
             if device is None:
@@ -218,8 +218,7 @@ class Tensor(Value):
                 )
         else:
             device = device if device else cpu()
-            cached_data = Tensor._array_from_numpy(array, device=device,
-                                                   dtype=dtype)
+            cached_data = Tensor._array_from_numpy(array, device=device, dtype=dtype)
 
         self._init(
             None,
@@ -389,20 +388,21 @@ def compute_gradient_of_variables(output_tensor: Tensor, out_grad: Tensor):
     for node in reverse_topo_order:
         assert isinstance(node, Tensor)
 
-        print("")
-        print(f"Node {node.debug_shape()}")
-        print("==================")
-        inputs = ", ".join(f"{x.debug_shape()}" for x in node.inputs)
-        print(f"inputs: {inputs}")
         output_grads = node_to_output_grads_list[node]
-        partial_adjoints = ", ".join(x.debug_shape() for x in output_grads)
-        print(f"partial_adjoints: {partial_adjoints}")
-        for grad in output_grads:
-            assert grad.shape == node.data.shape, node.debug_shape()
         grad = functools.reduce(lambda a, b: a + b, output_grads)
+        assert node.shape == grad.shape
         node.grad = grad
 
-        assert node.grad.shape == node.data.shape
+        # print("")
+        # print(f"Node {node.debug_shape()}")
+        # print("==================")
+        # inputs = ", ".join(f"{x.debug_shape()}" for x in node.inputs)
+        # print(f"inputs: {inputs}")
+        # partial_adjoints = ", ".join(x.debug_shape() for x in output_grads)
+        # print(f"partial_adjoints: {partial_adjoints}")
+        # for grad in output_grads:
+        #     assert grad.shape == node.data.shape, f"{grad.debug_shape()},{node.debug_shape()}"
+        #     assert grad.dtype == np.float32, grad.dtype
 
         if node.is_leaf():
             continue
