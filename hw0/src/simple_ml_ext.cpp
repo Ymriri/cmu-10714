@@ -1,3 +1,4 @@
+#include <cstddef>
 #include <pybind11/pybind11.h>
 #include <pybind11/numpy.h>
 #include <cmath>
@@ -18,6 +19,71 @@ void print_mat(const float *mat, size_t m, size_t n) {
     printf("]\n");
 }
 
+void my_softmax_regresion(const float *X,
+    const unsigned char *y,
+    float *theta,
+    size_t m, size_t n, size_t k,
+    float lr)
+{
+    // 首先计算min_X@ theta  (batch, numclass)
+    float *temp_Z = (float*) malloc(sizeof(float) * m * k);
+    // k应该是批次
+    for(size_t i=0;i<m*k;i++){
+        float now_value = 0.;
+        // 计算当前的batch
+        size_t r = i/k;
+        // 当前的num_calss
+        size_t l = i%k;
+        // j 是特征的数量
+        for(size_t j=0;j<n;j++){
+            now_value += X[r*n+j]*theta[j*k+l];
+        }
+        // 计算e^value
+        temp_Z[i] = exp(now_value);
+
+    }
+
+    // 计算 a/sum
+    for(size_t i=0;i<m;i++){
+        float sum = 0.;
+        for(size_t j=0;j<k;j++){
+            sum+=temp_Z[i*k+j];
+        }
+        for(size_t j=0;j<k;j++){
+            temp_Z[i*k+j] /= sum;
+        }
+    }
+
+    // 开始计算梯度
+
+    // Z-I , 只需要计算每列的正确的标签
+    for(size_t i=0;i<m;i++){
+        // 为什么是size_t(y[i]) 因为y[i]是unsigned char类型
+        temp_Z[i*k + size_t(y[i])] -= 1.;
+    }
+
+    // 计算 mini_x.T @ (Z-I) (feature*batch) * (batch*numclass) = feature*numclass
+    float *dW = (float*) malloc(sizeof(float) * n * k);
+
+    for( size_t i=0;i<n*k;i++){
+        float now_value = 0.;
+        size_t r = i/k;
+        size_t l = i%k;
+        for(size_t j=0;j<m;j++){
+            now_value += X[j*n+r]*temp_Z[j*k+l];
+        }
+        dW[i] = now_value;
+    }
+
+    // updat theta value
+    for (size_t i = 0; i < n * k; i++) {
+        theta[i] -= lr * dW[i] / m;
+    }
+
+    free(temp_Z);
+    free(dW);
+
+}
 void softmax_regression(
     const float *X,
     const unsigned char *y,
@@ -109,7 +175,8 @@ void softmax_regression_epoch_cpp(
     for (size_t i = 0; i < num_batches; i++) {
         const float *mini_X = X + i * batch * n;
         const unsigned char *mini_y = y + i * batch;
-        softmax_regression(mini_X, mini_y, theta, batch, n, k, lr);
+        // 拿到当前批次的数据，然后计算softmax_regression , update theta
+        my_softmax_regresion(mini_X, mini_y, theta, batch, n, k, lr);
     }
 }
 

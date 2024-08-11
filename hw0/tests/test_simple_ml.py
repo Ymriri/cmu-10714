@@ -4,10 +4,11 @@ import numdifftools as nd
 sys.path.append("./src")
 # import mugrade
 from simple_ml import *
-try:
-    from simple_ml_ext import *
-except:
-    pass
+# try:
+from simple_ml_ext import *
+    # print("success!")
+# except:
+#     pass
 
 
 ##############################################################################
@@ -83,7 +84,7 @@ def submit_softmax_loss():
 def test_softmax_regression_epoch():
     # test numeical gradient
     np.random.seed(0)
-    X = np.random.randn(50,5).astype(np.float32)
+    X = np.random.randn(50 ,5).astype(np.float32)
     y = np.random.randint(3, size=(50,)).astype(np.uint8)
     Theta = np.zeros((5,3), dtype=np.float32)
     dTheta = -nd.Gradient(lambda Th : softmax_loss(X@Th.reshape(5,3),y))(Theta)
