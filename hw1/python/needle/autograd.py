@@ -136,6 +136,7 @@ class Value:
 
     @classmethod
     def make_const(cls, data, *, requires_grad=False):
+        # 实例话一个对象
         value = cls.__new__(cls)
         value._init(
             None,
@@ -374,19 +375,22 @@ def compute_gradient_of_variables(output_tensor: Tensor, out_grad: Tensor):
     # Special note on initializing gradient of
     # We are really taking a derivative of the scalar reduce_sum(output_node)
     # instead of the vector output_node. But this is the common case for loss function.
+    #
     node_to_output_grads_list[output_tensor] = [out_grad]
-
+    # print("计算梯度变量.................")
     # Traverse graph in reverse topological order given the output_node that we are taking gradient
     # wrt.
+    # 反转计算图
     reverse_topo_order = list(reversed(find_topo_sort([output_tensor])))
-
+    # 依旧是从前面的节点开始计算
     for node in reverse_topo_order:
         assert isinstance(node, Tensor)
 
         output_grads = node_to_output_grads_list[node]
+        # 汇总前面传递过来的
         grad = functools.reduce(lambda a, b: a + b, output_grads)
+        # 前面传过来的梯度
         node.grad = grad
-
         if node.is_leaf():
             continue
 
@@ -397,7 +401,9 @@ def compute_gradient_of_variables(output_tensor: Tensor, out_grad: Tensor):
 
         for input_node, partial_grad in zip(node.inputs, partial_grads):
             if input_node not in node_to_output_grads_list:
+                # 需要先依次添加
                 node_to_output_grads_list[input_node] = []
+            # 依次记录偏导
             node_to_output_grads_list[input_node].append(partial_grad)
 
 
@@ -408,6 +414,7 @@ def find_topo_sort(node_list: List[Value]) -> List[Value]:
     going backwards based on input edges. Since a node is added to the ordering
     after all its predecessors are traversed due to post-order DFS, we get a topological
     sort.
+    从最后一个节点往前遍历input 数据
     """
     topo_order = []
     visited = set()
@@ -421,10 +428,9 @@ def topo_sort_dfs(node: Value, visited: Set[Value], topo_order: List[Value]):
     """Post-order DFS"""
     if node in visited:
         return
-
+    #
     for input in node.inputs:
         topo_sort_dfs(input, visited, topo_order)
-
     topo_order.append(node)
     visited.add(node)
 

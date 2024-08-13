@@ -16,6 +16,9 @@ import numpy as array_api
 
 class EWiseAdd(TensorOp):
     def compute(self, a: NDArray, b: NDArray):
+        """
+        目前还都是numpy的array，所以直接相加即可
+        """
         return a + b
 
     def gradient(self, out_grad: Tensor, node: Tensor):
@@ -43,7 +46,7 @@ def add_scalar(a, scalar):
 
 class EWiseMul(TensorOp):
     def compute(self, a: NDArray, b: NDArray):
-        return a * b
+        return a*b
 
     def gradient(self, out_grad: Tensor, node: Tensor):
         lhs, rhs = node.inputs
@@ -80,11 +83,15 @@ class PowerScalar(TensorOp):
 
     def gradient(self, out_grad: Tensor, node: Tensor):
         a = node.inputs[0]
+        # 不是不准用numpy?
         return array_api.multiply(out_grad,
                                   a ** (self.scalar - 1) * self.scalar)
 
 
 def power_scalar(a, scalar):
+    """
+    指数函数
+    """
     return PowerScalar(scalar)(a)
 
 
@@ -118,6 +125,7 @@ class EWiseDiv(TensorOp):
 
     def gradient(self, out_grad: Tensor, node: Tensor):
         lhs, rhs = node.inputs
+        # 两边分别求偏导
         return out_grad / rhs, - out_grad * lhs / (rhs ** 2.)
 
 
@@ -187,11 +195,13 @@ class BroadcastTo(TensorOp):
         self.shape = shape
 
     def compute(self, a: NDArray):
+        # 依旧是调用numpy的广播函数
         return array_api.broadcast_to(a, self.shape)
 
     def gradient(self, out_grad: Tensor, node: Tensor):
         a = node.inputs[0]
         assert isinstance(a, Tensor)
+        # 直接减少，然后求和？
         axes = _broadcast_axes(a.shape, out_grad.shape)
         # TODO(zhangfan): Not a fan of it since it feels hacky.
         #   the reshape is needed since axes can remove the dimensions
@@ -210,22 +220,29 @@ class Summation(TensorOp):
         self.axes = axes
 
     def compute(self, a: NDArray):
-        return array_api.sum(a, self.axes)
+        return array_api.sum(a, axis=self.axes)
 
     def gradient(self, out_grad: Tensor, node: Tensor):
         a = node.inputs[0]
         assert isinstance(a, Tensor)
-
+        # 记录 原来的shape
         new_shape = list(a.shape)
-        squashed_axes = self.axes if self.axes else range(len(a.shape))
+        # print(new_shape)
+        # print(self.axes)
+        # 存在当个int 类型，所以需要多个判断和自动校正
+        squashed_axes = [self.axes] if isinstance(self.axes, int) else (self.axes if self.axes else range(len(a.shape)))
+        # 已经求和的值变成了 1
         for axis in squashed_axes:
             new_shape[axis] = 1
         new_shape = tuple(new_shape)
-
+        #
         return out_grad.reshape(new_shape).broadcast_to(a.shape)
 
 
 def summation(a, axes=None):
+    """
+    第几维求和
+    """
     return Summation(axes)(a)
 
 
@@ -245,9 +262,12 @@ class MatMul(TensorOp):
         #
         # the right-hand side can be derived similarly, or consider the
         # transpose of the equation since now rhs becomes lhs.
+
+        # 这里会自动进行广播拓展
         lhs_grad = out_grad @ rhs.transpose()  # n x k @ k x m = n x m
         rhs_grad = lhs.transpose() @ out_grad  # m x n @ n x k = m x n
 
+        # 需要移除多余的维度
         lhs_grad = lhs_grad.sum(
             _broadcast_axes(lhs.shape, lhs_grad.shape)).reshape(lhs.shape)
         rhs_grad = rhs_grad.sum(
@@ -269,6 +289,9 @@ class Negate(TensorOp):
 
 
 def negate(a):
+    """
+    取负数
+    """
     return Negate()(a)
 
 
@@ -292,8 +315,8 @@ class Exp(TensorOp):
     def gradient(self, out_grad: Tensor, node: Tensor):
         a = node.inputs[0]
         assert isinstance(a, Tensor)
-        print(a.shape, a.dtype)
-        print(out_grad.shape, out_grad.dtype)
+        # print(a.shape, a.dtype)
+        # print(out_grad.shape, out_grad.dtype)
         return out_grad * exp(a)
 
 
@@ -316,11 +339,14 @@ def relu(a):
 
 
 def _broadcast_axes(old: tuple, new: tuple):
+    # 找到
     assert len(new) >= len(old)
     axes = []
     for i in range(len(new)):
+        # 从后面比较维度是否相同
         if i < len(old) and new[-(i + 1)] == old[-(i + 1)]:
             continue
+        # 从后面记录维度
         axes.append(len(new) - i - 1)
 
     return tuple(axes)
